@@ -65,6 +65,8 @@ def main():
             r.ping_interval = 60
             r.ping_timeout = 30  # Set timeout less than interval to avoid warning
 
+    relay_manager.run_sync()
+
     all_events_map = {}
 
     if args.source_scope == "follow":
@@ -81,7 +83,6 @@ def main():
         contact_sub_id = uuid.uuid1().hex
         contact_filters = FiltersList([Filters(kinds=[EventKind.CONTACTS], authors=[pubkey_hex], limit=1)])
         relay_manager.add_subscription_on_all_relays(contact_sub_id, contact_filters)
-        relay_manager.run_sync()
 
         time.sleep(args.sleep)
 
@@ -113,7 +114,6 @@ def main():
             for attempt in range(args.max_retries):
                 try:
                     relay_manager.add_subscription_on_all_relays(chunk_sub_id, chunk_filters)
-                    relay_manager.run_sync()
                     
                     time.sleep(args.sleep)
                     
@@ -146,7 +146,6 @@ def main():
         for attempt in range(args.max_retries):
             try:
                 relay_manager.add_subscription_on_all_relays(subscription_id, filters)
-                relay_manager.run_sync()
                 time.sleep(args.sleep)
                 
                 while relay_manager.message_pool.has_events():
