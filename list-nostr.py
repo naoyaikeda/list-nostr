@@ -37,6 +37,7 @@ def main():
     parser = argparse.ArgumentParser(description="list nostr chats")
     parser.add_argument("-p", "--profile", type=str, default="default", help="Profile name to use")
     parser.add_argument("-f", "--from", dest="source_scope", choices=["public", "follow"], default="public", help="Source of events: public (default) or follow")
+    parser.add_argument("-l", "--limit", type=int, default=100, help="Number of events to fetch")
     args = parser.parse_args()
 
     profile_name = args.profile
@@ -82,10 +83,10 @@ def main():
             relay_manager.message_pool.get_notice()
 
         authors = follows + [pubkey_hex]
-        filters_list = [Filters(kinds=[EventKind.TEXT_NOTE], authors=authors, limit=100)]
+        filters_list = [Filters(kinds=[EventKind.TEXT_NOTE], authors=authors, limit=args.limit)]
         console.print(f"Fetching timeline for {len(follows)} follows...")
     else:
-        filters_list = [Filters(kinds=[EventKind.TEXT_NOTE], limit=100)]
+        filters_list = [Filters(kinds=[EventKind.TEXT_NOTE], limit=args.limit)]
 
     filters = FiltersList(filters_list)
 
