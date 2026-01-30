@@ -176,7 +176,11 @@ def main():
     # For now, we show all fetched.
 
     for event in events_list:
-        console.print(f"[green]{event.date_time().strftime('%Y-%m-%d %H:%M:%S')}[/green] [bold blue]{event.pubkey[:8]}[/bold blue]: {event.content}")
+        try:
+            console.print(f"[green]{event.date_time().strftime('%Y-%m-%d %H:%M:%S')}[/green] [bold blue]{event.pubkey[:8]}[/bold blue]: {event.content}")
+        except Exception:
+            # Fallback for when rich fails to render certain characters
+            print(f"{event.date_time().strftime('%Y-%m-%d %H:%M:%S')} {event.pubkey[:8]}: {event.content}")
         console.print("-" * 20)
 
     if len(events_list) == 0:
