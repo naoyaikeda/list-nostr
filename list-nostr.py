@@ -56,7 +56,7 @@ def main():
     relays = active_profile['relays']
     console.print(f"Relays: {', '.join(relays)}")
 
-    relay_manager = RelayManager(timeout=2)
+    relay_manager = RelayManager(timeout=10)
 
     for relay in relays:
         relay_manager.add_relay(relay)
@@ -85,14 +85,19 @@ def main():
         # Fetch contacts
         contact_sub_id = uuid.uuid1().hex
         contact_filters = FiltersList([Filters(kinds=[EventKind.CONTACTS], authors=[pubkey_hex], limit=1)])
+
+        time.sleep(1.25)
         relay_manager.add_subscription_on_all_relays(contact_sub_id, contact_filters)
 
         follows = []
-        end_time = time.time() + args.sleep
+        timeout = 10
+        end_time = time.time() + timeout
+
         while time.time() < end_time:
             while relay_manager.message_pool.has_events():
                 event_msg = relay_manager.message_pool.get_event()
                 if event_msg.subscription_id != contact_sub_id:
+                    console.print(f"[dim]Debug: Ignored event from different sub_id: {event_msg.subscription_id}[/dim]")
                     continue
 
                 if event_msg.event.kind == EventKind.CONTACTS and event_msg.event.pubkey == pubkey_hex:
@@ -101,7 +106,13 @@ def main():
                         if tag[0] == 'p':
                             new_follows.append(tag[1])
                     follows = new_follows
-                    end_time = 0 # Break outer loop
+
+            if follows:
+                break
+
+            while relay_manager.message_pool.has_eose_notices():
+                _ = relay_manager.message_pool.get_eose_notice()
+
             time.sleep(0.1)
 
         relay_manager.close_subscription_on_all_relays(contact_sub_id)
@@ -123,19 +134,33 @@ def main():
             
             for attempt in range(args.max_retries):
                 try:
+                    time.sleep(1.25)
                     relay_manager.add_subscription_on_all_relays(chunk_sub_id, chunk_filters)
                     
                     found_events = False
-                    end_time = time.time() + args.sleep
+                    timeout = 10
+                    end_time = time.time() + timeout
+                    eose_count = 0
+
                     while time.time() < end_time:
                         while relay_manager.message_pool.has_events():
                             event_msg = relay_manager.message_pool.get_event()
                             if event_msg.subscription_id != chunk_sub_id:
+                                console.print(f"[dim]Debug: Ignored event from different sub_id: {event_msg.subscription_id}[/dim]")
                                 continue
 
                             event = event_msg.event
                             all_events_map[event.id] = event
                             found_events = True
+
+                        while relay_manager.message_pool.has_eose_notices():
+                            notice = relay_manager.message_pool.get_eose_notice()
+                            if notice.subscription_id == chunk_sub_id:
+                                eose_count += 1
+
+                        if eose_count >= len(relay_manager.relays):
+                            break
+
                         time.sleep(0.1)
                     
                     relay_manager.close_subscription_on_all_relays(chunk_sub_id)
@@ -159,17 +184,31 @@ def main():
         
         for attempt in range(args.max_retries):
             try:
+                time.sleep(1.25)
                 relay_manager.add_subscription_on_all_relays(subscription_id, filters)
                 
-                end_time = time.time() + args.sleep
+                timeout = 10
+                end_time = time.time() + timeout
+                eose_count = 0
+
                 while time.time() < end_time:
                     while relay_manager.message_pool.has_events():
                         event_msg = relay_manager.message_pool.get_event()
                         if event_msg.subscription_id != subscription_id:
+                            console.print(f"[dim]Debug: Ignored event from different sub_id: {event_msg.subscription_id}[/dim]")
                             continue
 
                         event = event_msg.event
                         all_events_map[event.id] = event
+
+                    while relay_manager.message_pool.has_eose_notices():
+                        notice = relay_manager.message_pool.get_eose_notice()
+                        if notice.subscription_id == subscription_id:
+                            eose_count += 1
+
+                    if eose_count >= len(relay_manager.relays):
+                        break
+
                     time.sleep(0.1)
                 
                 relay_manager.close_subscription_on_all_relays(subscription_id)
