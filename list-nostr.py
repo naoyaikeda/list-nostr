@@ -36,6 +36,14 @@ def load_config(profile_name: str):
 
     return active_profile
 
+def wait_for_connection(relay_manager, timeout=5, interval=0.1):
+    """Wait for at least one relay to be connected."""
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        if any(r.is_connected for r in relay_manager.relays.values()):
+            return
+        time.sleep(interval)
+
 def main():
     console = Console()
 
@@ -83,15 +91,18 @@ def main():
         relay_manager.add_subscription_on_all_relays(contact_sub_id, contact_filters)
         relay_manager.run_sync()
 
-        time.sleep(args.sleep)
+        wait_for_connection(relay_manager)
 
+        time_end = time.time() + args.sleep
         follows = []
-        while relay_manager.message_pool.has_events():
-            event_msg = relay_manager.message_pool.get_event()
-            if event_msg.event.kind == EventKind.CONTACTS and event_msg.event.pubkey == pubkey_hex:
-                for tag in event_msg.event.tags:
-                    if tag[0] == 'p':
-                        follows.append(tag[1])
+        while time.time() < time_end:
+            while relay_manager.message_pool.has_events():
+                event_msg = relay_manager.message_pool.get_event()
+                if event_msg.event.kind == EventKind.CONTACTS and event_msg.event.pubkey == pubkey_hex:
+                    for tag in event_msg.event.tags:
+                        if tag[0] == 'p':
+                            follows.append(tag[1])
+            time.sleep(0.1)
 
         relay_manager.close_subscription_on_all_relays(contact_sub_id)
 
@@ -115,14 +126,17 @@ def main():
                     relay_manager.add_subscription_on_all_relays(chunk_sub_id, chunk_filters)
                     relay_manager.run_sync()
                     
-                    time.sleep(args.sleep)
+                    wait_for_connection(relay_manager)
                     
+                    time_end = time.time() + args.sleep
                     found_events = False
-                    while relay_manager.message_pool.has_events():
-                        event_msg = relay_manager.message_pool.get_event()
-                        event = event_msg.event
-                        all_events_map[event.id] = event
-                        found_events = True
+                    while time.time() < time_end:
+                        while relay_manager.message_pool.has_events():
+                            event_msg = relay_manager.message_pool.get_event()
+                            event = event_msg.event
+                            all_events_map[event.id] = event
+                            found_events = True
+                        time.sleep(0.1)
                     
                     relay_manager.close_subscription_on_all_relays(chunk_sub_id)
                     
@@ -147,12 +161,16 @@ def main():
             try:
                 relay_manager.add_subscription_on_all_relays(subscription_id, filters)
                 relay_manager.run_sync()
-                time.sleep(args.sleep)
                 
-                while relay_manager.message_pool.has_events():
-                    event_msg = relay_manager.message_pool.get_event()
-                    event = event_msg.event
-                    all_events_map[event.id] = event
+                wait_for_connection(relay_manager)
+
+                time_end = time.time() + args.sleep
+                while time.time() < time_end:
+                    while relay_manager.message_pool.has_events():
+                        event_msg = relay_manager.message_pool.get_event()
+                        event = event_msg.event
+                        all_events_map[event.id] = event
+                    time.sleep(0.1)
                 
                 relay_manager.close_subscription_on_all_relays(subscription_id)
                 break
