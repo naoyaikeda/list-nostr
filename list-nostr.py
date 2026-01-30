@@ -67,6 +67,9 @@ def main():
 
     relay_manager.run_sync()
 
+    console.print("Connecting to relays...")
+    time.sleep(3)
+
     all_events_map = {}
 
     if args.source_scope == "follow":
@@ -84,15 +87,22 @@ def main():
         contact_filters = FiltersList([Filters(kinds=[EventKind.CONTACTS], authors=[pubkey_hex], limit=1)])
         relay_manager.add_subscription_on_all_relays(contact_sub_id, contact_filters)
 
-        time.sleep(args.sleep)
-
         follows = []
-        while relay_manager.message_pool.has_events():
-            event_msg = relay_manager.message_pool.get_event()
-            if event_msg.event.kind == EventKind.CONTACTS and event_msg.event.pubkey == pubkey_hex:
-                for tag in event_msg.event.tags:
-                    if tag[0] == 'p':
-                        follows.append(tag[1])
+        end_time = time.time() + args.sleep
+        while time.time() < end_time:
+            while relay_manager.message_pool.has_events():
+                event_msg = relay_manager.message_pool.get_event()
+                if event_msg.subscription_id != contact_sub_id:
+                    continue
+
+                if event_msg.event.kind == EventKind.CONTACTS and event_msg.event.pubkey == pubkey_hex:
+                    new_follows = []
+                    for tag in event_msg.event.tags:
+                        if tag[0] == 'p':
+                            new_follows.append(tag[1])
+                    follows = new_follows
+                    end_time = 0 # Break outer loop
+            time.sleep(0.1)
 
         relay_manager.close_subscription_on_all_relays(contact_sub_id)
 
@@ -115,14 +125,18 @@ def main():
                 try:
                     relay_manager.add_subscription_on_all_relays(chunk_sub_id, chunk_filters)
                     
-                    time.sleep(args.sleep)
-                    
                     found_events = False
-                    while relay_manager.message_pool.has_events():
-                        event_msg = relay_manager.message_pool.get_event()
-                        event = event_msg.event
-                        all_events_map[event.id] = event
-                        found_events = True
+                    end_time = time.time() + args.sleep
+                    while time.time() < end_time:
+                        while relay_manager.message_pool.has_events():
+                            event_msg = relay_manager.message_pool.get_event()
+                            if event_msg.subscription_id != chunk_sub_id:
+                                continue
+
+                            event = event_msg.event
+                            all_events_map[event.id] = event
+                            found_events = True
+                        time.sleep(0.1)
                     
                     relay_manager.close_subscription_on_all_relays(chunk_sub_id)
                     
@@ -146,12 +160,17 @@ def main():
         for attempt in range(args.max_retries):
             try:
                 relay_manager.add_subscription_on_all_relays(subscription_id, filters)
-                time.sleep(args.sleep)
                 
-                while relay_manager.message_pool.has_events():
-                    event_msg = relay_manager.message_pool.get_event()
-                    event = event_msg.event
-                    all_events_map[event.id] = event
+                end_time = time.time() + args.sleep
+                while time.time() < end_time:
+                    while relay_manager.message_pool.has_events():
+                        event_msg = relay_manager.message_pool.get_event()
+                        if event_msg.subscription_id != subscription_id:
+                            continue
+
+                        event = event_msg.event
+                        all_events_map[event.id] = event
+                    time.sleep(0.1)
                 
                 relay_manager.close_subscription_on_all_relays(subscription_id)
                 break
